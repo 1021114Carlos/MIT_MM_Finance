@@ -1,0 +1,323 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "authorship_tag": "ABX9TyO7EfnJiWVf5FEbJ8Mw97Zh",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/1021114Carlos/MIT_MM_Finance/blob/Finance-shop/%20%20%20%20MIT_MM_Finance/Courses/Derivative_Markets%20%20/%20M5_Black_Schole_Merton_and_Greeks.ipynb%20\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# Problem Sets"
+      ],
+      "metadata": {
+        "id": "llhY03RX_JnV"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from IPython.display import display, Math\n",
+        "import sympy as sp\n",
+        "import math\n",
+        "import pandas as pd\n",
+        "import matplotlib.pyplot as plt"
+      ],
+      "metadata": {
+        "id": "psuZrTs2GFF2"
+      },
+      "execution_count": 1,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "Calculate value of European put option today"
+      ],
+      "metadata": {
+        "id": "qkQO5PmuFGcx"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "def euro_put_binomial_crr(s0, k, r, q, t, sigma, n):\n",
+        "  \"\"\"\n",
+        "  European put price under crr binomial model\n",
+        "  \"\"\"\n",
+        "\n",
+        "  dt = t/n\n",
+        "  u = math.exp(sigma*math.sqrt(dt))\n",
+        "  d = 1.0/u\n",
+        "  r = math.exp((r - q)/(u - d))\n",
+        "  disc = math.exp(-r*dt)\n",
+        "\n",
+        "  # terminal stock price\n",
+        "  stock_prices = [s0*(u**j)*(d**(n - j)) for j in range(n + 1)]\n",
+        "  # put payoff\n",
+        "  values = [max(k -s, 0.0) for s in stock_prices]\n",
+        "\n",
+        "  # backward induction\n",
+        "  for step in range(n, 0, -1):\n",
+        "    values = [disc*(p*values[j + 1] + (1.0 - p)*values[j])for j in range(step)]\n",
+        "  return values[0]\n",
+        "\n"
+      ],
+      "metadata": {
+        "id": "a6WbYbtb98lQ"
+      },
+      "execution_count": 87,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "σ as a function of volatility"
+      ],
+      "metadata": {
+        "id": "dPQGypHWGbVu"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Put price vs volatility\n",
+        "\n",
+        "def price_vs_volatility(s0, k, r, q, t, n, sigmas):\n",
+        "  rows = []\n",
+        "  for sigma in sigmas:\n",
+        "    price = euro_put_binomial_crr(s0, k, r, q, t, sigma, n)\n",
+        "    rows.append({\"sigma\": sigma, \"put_price\": price})\n",
+        "  df = pd.DataFrame(rows)\n",
+        "  df[\"put_price\"] = df[\"put_price\"].round(6)\n",
+        "  return df\n",
+        "\n",
+        "# usage\n",
+        "s0 = 375.0\n",
+        "k = 300.0\n",
+        "r = 0.01\n",
+        "q = 0.0\n",
+        "t = 0.5\n",
+        "n = 10\n",
+        "sigmas = [0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50]\n",
+        "\n",
+        "df_vol = price_vs_volatility(s0, k, r, q, t, n, sigmas)\n",
+        "print(df_vol)\n",
+        "\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "1t_r8lnIFWE5",
+        "outputId": "868b72e7-57ef-4b16-9169-6c95e670d322"
+      },
+      "execution_count": 88,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "   sigma  put_price\n",
+            "0   0.20   0.658285\n",
+            "1   0.25   1.370741\n",
+            "2   0.30   2.998352\n",
+            "3   0.35   4.552843\n",
+            "4   0.40   6.032453\n",
+            "5   0.45   7.438281\n",
+            "6   0.50   8.790205\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "Price as a function of number of steps n and strike K"
+      ],
+      "metadata": {
+        "id": "OSmbLSwyH6Tw"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# put price relative to steps n and given strike k\n",
+        "\n",
+        "def price_vs_steps(s0, k, r, q, t, sigma, n_list):\n",
+        "  rows = []\n",
+        "  for n in n_list:\n",
+        "    price = euro_put_binomial_crr(s0, k, r, q, t, sigma, n)\n",
+        "    rows.append({\"n\": n, \"k\": k, \"put_price\": price})\n",
+        "  df = pd.DataFrame(rows)\n",
+        "  df[\"put_price\"] = df[\"put_price\"].round(6)\n",
+        "  return df\n",
+        "\n",
+        "# example to use\n",
+        "\n",
+        "sigma = 0.25\n",
+        "n_list = list(range(10, 101, 10))\n",
+        "\n",
+        "df300 = price_vs_steps(s0=375.0, k = 300.0, r=0.01, q=0.0, t=0.5, sigma=sigma, n_list=n_list)\n",
+        "df360 = price_vs_steps(s0=375.0, k = 360.0, r=0.01, q=0.0, t=0.5, sigma=sigma, n_list=n_list)\n",
+        "\n",
+        "# print(f\"k = 300 {df300} \\n\")\n",
+        "# print(f\"k = 360 {df360}\")\n",
+        "\n",
+        "print(df300)\n",
+        "print(\"\\n\")\n",
+        "print(df360)\n",
+        "\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "wsI4Eqb0H4Ln",
+        "outputId": "39616954-8e63-4e63-de9e-5466dd9f4715"
+      },
+      "execution_count": 84,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "     n      k  put_price\n",
+            "0   10  300.0   2.356337\n",
+            "1   20  300.0   2.714365\n",
+            "2   30  300.0   2.777989\n",
+            "3   40  300.0   2.647561\n",
+            "4   50  300.0   2.763315\n",
+            "5   60  300.0   2.711934\n",
+            "6   70  300.0   2.740899\n",
+            "7   80  300.0   2.751653\n",
+            "8   90  300.0   2.699818\n",
+            "9  100  300.0   2.743575\n",
+            "\n",
+            "\n",
+            "     n      k  put_price\n",
+            "0   10  360.0  18.793586\n",
+            "1   20  360.0  18.590931\n",
+            "2   30  360.0  18.461655\n",
+            "3   40  360.0  18.373167\n",
+            "4   50  360.0  18.307922\n",
+            "5   60  360.0  18.257249\n",
+            "6   70  360.0  18.216401\n",
+            "7   80  360.0  18.223241\n",
+            "8   90  360.0  18.259663\n",
+            "9  100  360.0  18.283968\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "Greeks with 5% increase (numerical derivatives)"
+      ],
+      "metadata": {
+        "id": "z48rxxT_KWNX"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Greeks with 5% increase\n",
+        "\n",
+        "\"\"\"\n",
+        "returns a dict: delta, gamma, theta, rho, vega\n",
+        "theta is given in the usual option convention (negative of dp/dt)\n",
+        "\"\"\"\n",
+        "def greeks_5pct_bump(s0, k, r, q, t, sigma, n, bump=0.05):\n",
+        "\n",
+        "  p0 = euro_put_binomial_crr(s0, k, r, q, t, sigma, n)\n",
+        "\n",
+        "  # Delta and Gamma\n",
+        "  s_up = s0*(1 + bump)\n",
+        "  s_down = s0*(1 - bump)\n",
+        "  h_s = s0*bump\n",
+        "\n",
+        "  p_up = euro_put_binomial_crr(s_up, k, r, q, t, sigma, n)\n",
+        "  p_down = euro_put_binomial_crr(s_down, k, r, q, t, sigma, n)\n",
+        "\n",
+        "  # forward delta\n",
+        "  delta = (p_up - p0)/(s_up - s0)\n",
+        "\n",
+        "  #symmetric gamma using two-sided deltas around s0\n",
+        "  delta_plus = (p_up - p0)/(h_s)\n",
+        "  delta_minus = (p0 - p_down)/h_s\n",
+        "  gamma = (delta_plus - delta_minus)/(s_up - s_down)\n",
+        "\n",
+        "  # theta\n",
+        "  t_up = t*(1 + bump)\n",
+        "  p_t_up = euro_put_binomial_crr(s0, k, r, q, t_up, sigma, n)\n",
+        "  dp_dt = (p_t_up - p0)/(t_up - t)\n",
+        "  theta = -dp_dt  # as per convention\n",
+        "\n",
+        "\n",
+        "  # rho\n",
+        "  r_up = r*(1 + bump)\n",
+        "  p_r_up = euro_put_binomial_crr(s0, k, r_up, q, t, sigma, n)\n",
+        "  rho = (p_r_up - p0)/(r_up -r)\n",
+        "\n",
+        "  # Vega\n",
+        "\n",
+        "  sigma_up = sigma*(1 + bump)\n",
+        "  p_sigma_up = euro_put_binomial_crr(s0, k, r, q, t, sigma_up, n)\n",
+        "  vega = (p_sigma_up - p0)/(sigma_up -sigma)\n",
+        "\n",
+        "  return {\"Price\": p0, \"Delta\": delta, \"Gamma\": gamma, \"Theta\": theta, \"Rho\": rho, \"Vega\": vega}\n",
+        "\n",
+        "# Example use\n",
+        "\n",
+        "greeks = greeks_5pct_bump(s0=375.0, k=300.0, r=0.01, q=0.0, t=0.5, sigma=0.25, n=10)\n",
+        "for name, value in greeks.items():\n",
+        "  print(f\"{name:6s}: {value:.6f}\")\n",
+        "\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "9VHdvipaJo38",
+        "outputId": "66c159ab-fc7f-440a-97b4-3b2cf42f2f46"
+      },
+      "execution_count": 86,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Price : 2.356337\n",
+            "Delta : -0.043801\n",
+            "Gamma : 0.002653\n",
+            "Theta : -14.244658\n",
+            "Rho   : -14.952611\n",
+            "Vega  : 59.047721\n"
+          ]
+        }
+      ]
+    }
+  ]
+}
